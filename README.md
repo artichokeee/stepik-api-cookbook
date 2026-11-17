@@ -19,7 +19,7 @@ Practical notes on the undocumented Stepik API (stepik.org/api) for course autho
 1. **У API нет CORS.** Из браузера его не вызвать – только из скрипта или своего сервера.
 2. **Обновление – это `PUT` полным объектом.** Частичного `PATCH` нет; у курса и урока без `title` запрос отбивается с 400.
 3. **Урок, созданный через API, по умолчанию публичный** – открывается по прямой ссылке кому угодно. Передавайте `is_public: false` явно.
-4. **HTML в `POST /api/courses` блокирует защита Stepik**, а серия таких запросов закрывает доступ с вашего IP на 5–10 минут. Курс создается без описания, описание отправляется следующим `PUT`.
+4. **HTML в `POST /api/courses` блокирует защита Stepik**, а серия таких запросов закрывает доступ с вашего IP на 5–10 минут. Увидели 403 с HTML-страницей вместо JSON – остановитесь и не повторяйте запрос.
 5. **201 на создание исполняемого шага (`code`, `sql`, `math`…) не значит, что шаг работает.** Stepik собирает его через несколько секунд и может пометить `status: "error"`.
 
 ## Приложение OAuth на Stepik
@@ -126,7 +126,7 @@ s.put(f"{API}/step-sources/{st['id']}", json=payload, timeout=30).raise_for_stat
 | [04-writing.md](docs/04-writing.md) | `PUT` полным объектом, создание курса и урока, позиции, готовность шагов |
 | [05-step-types.md](docs/05-step-types.md) | `block` и `source` каждого типа шага, санитайзер HTML, пределы длины полей |
 | [06-media.md](docs/06-media.md) | загрузка видео, видео-превью курса, картинки и доступность CDN |
-| [07-comments-and-announcements.md](docs/07-comments-and-announcements.md) | комментарии, ответ на отзыв, уведомления, новости курса и триггеры |
+| [07-comments-and-announcements.md](docs/07-comments-and-announcements.md) | комментарии, уведомления, новости курса и триггеры |
 | [08-errors-and-limits.md](docs/08-errors-and-limits.md) | тело ошибок, повторы на 429/5xx, как не попасть под блокировку |
 | [09-permissions.md](docs/09-permissions.md) | команда курса, приглашения, баны, рецензирование |
 

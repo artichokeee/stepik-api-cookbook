@@ -11,7 +11,6 @@ POST /api/step-sources       {"stepSource": {...}}
 PUT  /api/courses/<id>       {"course":     {...}}
 PUT  /api/sections/<id>      {"section":    {...}}
 PUT  /api/comments/<id>      {"comment":    {...}}
-PUT  /api/course-reviews/<id> {"courseReview": {...}}
 ```
 
 Ответ – как при чтении: список под ключом во множественном числе (`lessons[0]`). Удаление – `DELETE /api/<ресурс>/<id>`. Действия над объектом – `POST /api/<ресурс>/<id>/<действие>` с пустым телом `{}` (например, `announcements/<id>/send`).
@@ -38,14 +37,14 @@ put(f"/lessons/{lid}", {"lesson": lesson})
 - С таким набором полей создание проходит без возражений валидатора:
 
 ```json
-{"course": {"title": "Название", "is_public": false, "course_type": "basic", "is_paid": false,
+{"course": {"title": "Название", "is_public": false, "course_type": "basic",
             "is_certificate_with_score": false, "with_certificate": false,
             "is_self_paced": false, "is_enabled": false, "language": "ru"}}
 ```
 
 **Ожидание:** описание курса можно передать сразу в `POST /api/courses`.
 **На деле:** HTML в теле `POST /api/courses` защита Stepik принимает за атаку и отвечает "Access Blocked", а несколько таких запросов подряд закрывают доступ с IP на 5–10 минут.
-**Что делать:** создайте курс без `description`, затем отправьте описание обычным `PUT /api/courses/<id>`. Подробно – [08-errors-and-limits.md](08-errors-and-limits.md#как-не-попасть-под-блокировку).
+**Что делать:** не передавайте разметку в `POST /api/courses`; описание курса заполните в интерфейсе Stepik. Подробно – [08-errors-and-limits.md](08-errors-and-limits.md#как-не-попасть-под-блокировку).
 
 ## Создание урока
 

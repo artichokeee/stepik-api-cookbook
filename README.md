@@ -12,6 +12,8 @@ Practical notes on the undocumented Stepik API (stepik.org/api) for course autho
 
 Для автора или соавтора курса на Stepik, который хочет делать скриптом то, что долго делать руками в редакторе: выгрузить курс в JSON, найти фразу во всех шагах, поправить текст шага, расставить модули по порядку, ответить на комментарии в своем курсе.
 
+Программировать для этого не нужно. Готовые скрипты из [examples/](examples/) запускаются одной командой, а [пошаговая инструкция](#первый-запуск-без-опыта-программирования) ниже рассказывает, что установить и что делать, если сразу не заработало.
+
 Это неофициальное руководство, оно не связано с командой Stepik. Stepik – товарный знак его владельцев. Официальные материалы: список методов [stepik.org/api/docs](https://stepik.org/api/docs) и примеры [StepicOrg/Stepik-API](https://github.com/StepicOrg/Stepik-API). Stepik может поменять поведение API в любой день; где известна дата проверки, она указана.
 
 Все примеры работают с вашим собственным курсом через ваше OAuth-приложение и бережно относятся к серверу: запросы идут последовательно и с паузой.
@@ -24,21 +26,101 @@ Practical notes on the undocumented Stepik API (stepik.org/api) for course autho
 4. **HTML в `POST /api/courses` блокирует защита Stepik**, а серия таких запросов закрывает доступ с вашего IP на 5–10 минут. Увидели 403 с HTML-страницей вместо JSON – остановитесь и не повторяйте запрос.
 5. **201 на создание исполняемого шага (`code`, `sql`, `math`…) не значит, что шаг работает.** Stepik собирает его через несколько секунд и может пометить `status: "error"`.
 
+## Первый запуск без опыта программирования
+
+Понадобятся Python, одна библиотека и командная строка. Редактор кода не обязателен: скрипты запускаются из командной строки и ничего не нужно в них править.
+
+### 1. Установите Python 3
+
+- **Windows.** Скачайте установщик с [python.org/downloads](https://www.python.org/downloads/). В первом окне установщика поставьте галочку **"Add python.exe to PATH"** – без нее команда `python` не найдется.
+- **macOS.** Скачайте установщик с того же [python.org/downloads](https://www.python.org/downloads/) или, если стоит Homebrew, выполните `brew install python`.
+- **Linux.** Обычно Python уже есть.
+
+### 2. Откройте командную строку
+
+- **Windows:** меню "Пуск" → наберите "PowerShell" или "Терминал".
+- **macOS:** Cmd + Пробел → наберите "Терминал".
+
+Проверьте, что Python установился:
+
+```bash
+python3 --version     # macOS и Linux
+py --version          # Windows
+```
+
+Должно появиться что-то вроде `Python 3.12.4`. Дальше в командах для Windows пишите `py` вместо `python3`.
+
+### 3. Скачайте справочник
+
+На странице репозитория нажмите зеленую кнопку **Code → Download ZIP** и распакуйте архив. Затем перейдите в папку в командной строке:
+
+```bash
+cd путь/к/папке/stepik-api-cookbook-main
+```
+
+Путь можно не набирать: напишите `cd ` с пробелом и перетащите папку в окно командной строки.
+
+### 4. Установите библиотеку requests
+
+```bash
+python3 -m pip install requests     # macOS и Linux
+py -m pip install requests          # Windows
+```
+
+### 5. Получите ключи и передайте их скриптам
+
+Как создать ключи – в разделе [Приложение OAuth на Stepik](#приложение-oauth-на-stepik). Задайте их в том же окне командной строки:
+
+```bash
+# macOS и Linux
+export STEPIK_CLIENT_ID="ваш Client id"
+export STEPIK_CLIENT_SECRET="ваш Client secret"
+```
+
+```powershell
+# Windows, PowerShell
+$env:STEPIK_CLIENT_ID="ваш Client id"
+$env:STEPIK_CLIENT_SECRET="ваш Client secret"
+```
+
+Ключи действуют, пока открыто это окно. В новом окне их нужно задать заново.
+
+### 6. Запустите скрипт
+
+Номер курса виден в адресе: в `stepik.org/course/12345/syllabus` это `12345`. Номер урока – в адресе `stepik.org/lesson/123456/step/1`, это `123456`.
+
+```bash
+python3 examples/backup_course.py 12345          # резервная копия курса в course-12345-backup.json
+python3 examples/list_lesson_steps.py 123456     # шаги урока с номерами
+python3 examples/find_in_steps.py 12345 "слово"  # где в курсе встречается слово
+```
+
+Чтобы посмотреть скрипты или поправить их под себя, удобно открыть папку в бесплатном редакторе [VS Code](https://code.visualstudio.com/): в нем есть встроенная командная строка (меню Terminal → New Terminal), и все команды выше работают там же.
+
+### Если не сработало
+
+| Что видно | Что сделать |
+|---|---|
+| `python3: command not found`, `Имя "python" не распознано` или `"python" не является внутренней или внешней командой` | Python не установлен или не добавлен в PATH. На Windows пишите `py`; если и он не находится, переустановите Python с галочкой "Add python.exe to PATH" и откройте новое окно командной строки |
+| `No module named 'requests'` | Выполните шаг 4. Если библиотек несколько версий Python, ставьте той же командой, которой запускаете: `python3 -m pip …` или `py -m pip …` |
+| `"pip" не является внутренней или внешней командой` | Пишите `py -m pip install requests` вместо `pip install requests` |
+| `Задайте STEPIK_CLIENT_ID и STEPIK_CLIENT_SECRET в окружении` | Ключи не заданы в этом окне: выполните шаг 5 еще раз в том же окне, где запускаете скрипт |
+| `Токен не получен: 401` | Ключ скопирован с лишним пробелом или у приложения не тот тип: нужен Confidential и Client credentials |
+| `403: You do not have permission to perform this action` | Курс или шаг не ваш, или передан не тот номер: например, номер урока вместо номера шага |
+| `403 от защиты Stepik, а не от API` | Слишком много запросов подряд. Подождите 10 минут и не запускайте скрипт повторно до этого |
+| `CERTIFICATE_VERIFY_FAILED` на macOS | Python с python.org не установил сертификаты. Откройте папку "Программы → Python 3.x" и запустите `Install Certificates.command` |
+| `cd: no such file or directory` | Неверный путь к папке. Перетащите папку в окно командной строки после `cd ` |
+
 ## Приложение OAuth на Stepik
 
 1. Войдите на Stepik и откройте https://stepik.org/oauth2/applications/ – кнопка "Add application" (или сразу https://stepik.org/oauth2/applications/register/).
 2. Client type – **Confidential**, Authorization grant type – **Client credentials**.
 3. Сохраните и скопируйте Client id и Client secret.
-4. Положите их в переменные окружения:
-
-```bash
-export STEPIK_CLIENT_ID="..."
-export STEPIK_CLIENT_SECRET="..."
-```
+4. Задайте их в командной строке, как в [шаге 5](#5-получите-ключи-и-передайте-их-скриптам) выше.
 
 Пара Client id + Client secret дает полный доступ к вашему аккаунту без срока действия. Не коммитьте ее и не передавайте посторонним сервисам. Вход от имени других пользователей (authorization code) – в [docs/01-auth.md](docs/01-auth.md).
 
-## Быстрый старт за 5 минут
+## Быстрый старт для тех, кто пишет код
 
 ### curl
 
@@ -149,4 +231,4 @@ Python 3.8+, только стандартная библиотека и `reques
 
 ---
 
-Курсы автора – на [Rusau Learn](https://learn.rusau.net/?utm_source=github&utm_medium=readme&utm_campaign=gh-stepik-cookbook), профиль на Stepik – [stepik.org/users/483341705](https://stepik.org/users/483341705/teach).
+Профиль автора на Stepik – [stepik.org/users/483341705](https://stepik.org/users/483341705/teach).

@@ -6,7 +6,7 @@ Practical notes on the undocumented Stepik API (stepik.org/api) for course autho
 
 Практические заметки по API Stepik для авторов курсов. Официальной документации у API почти нет: формат шагов, обязательные поля, фильтры, которые молча ничего не находят, – все это приходится выяснять на живом курсе. Здесь собрано то, что уже выяснено.
 
-Автор – Артем Русов (Artyom Rusau), автор курсов на Stepik.
+Автор – Артем Русов (Artyom Rusau), [автор курсов на Stepik](https://stepik.org/users/rusau/profile).
 
 ## Для кого
 
@@ -233,4 +233,4 @@ Python 3.8+, только стандартная библиотека и `reques
 
 ---
 
-Профиль автора на Stepik – [stepik.org/users/483341705](https://stepik.org/users/483341705/teach).
+Профиль автора на Stepik – [stepik.org/users/rusau](https://stepik.org/users/rusau/profile).

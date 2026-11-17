@@ -1,0 +1,150 @@
+# Stepik API cookbook
+
+Practical notes on the undocumented Stepik API (stepik.org/api) for course authors: authentication, course structure, reading and writing lessons and steps, step block formats, media, comments, announcements, errors and permissions. Every quirk here was found on a live course and is written as "what you expect → what really happens → what to do". The text is in Russian; code and field names are kept exactly as the API uses them.
+
+---
+
+Практические заметки по API Stepik для авторов курсов. Официальной документации у API почти нет: формат шагов, обязательные поля, фильтры, которые молча ничего не находят, – все это приходится выяснять на живом курсе. Здесь собрано то, что уже выяснено.
+
+Автор – Артем Русов (Artyom Rusau), автор курсов на Stepik.
+
+## Для кого
+
+Для автора или соавтора курса на Stepik, который хочет делать скриптом то, что долго делать руками в редакторе: выгрузить курс в JSON, найти фразу во всех шагах, поправить текст шага, расставить модули по порядку, ответить на комментарии в своем курсе.
+
+Это не официальная документация. Stepik может поменять поведение API в любой день; где известна дата проверки, она указана.
+
+## Пять фактов, которые стоит знать до первого запроса
+
+1. **У API нет CORS.** Из браузера его не вызвать – только из скрипта или своего сервера.
+2. **Обновление – это `PUT` полным объектом.** Частичного `PATCH` нет; у курса и урока без `title` запрос отбивается с 400.
+3. **Урок, созданный через API, по умолчанию публичный** – открывается по прямой ссылке кому угодно. Передавайте `is_public: false` явно.
+4. **HTML в `POST /api/courses` блокирует защита Stepik**, а серия таких запросов закрывает доступ с вашего IP на 5–10 минут. Курс создается без описания, описание отправляется следующим `PUT`.
+5. **201 на создание исполняемого шага (`code`, `sql`, `math`…) не значит, что шаг работает.** Stepik собирает его через несколько секунд и может пометить `status: "error"`.
+
+## Приложение OAuth на Stepik
+
+1. Войдите на Stepik и откройте https://stepik.org/oauth2/applications/ – кнопка "Add application" (или сразу https://stepik.org/oauth2/applications/register/).
+2. Client type – **Confidential**, Authorization grant type – **Client credentials**.
+3. Сохраните и скопируйте Client id и Client secret.
+4. Положите их в переменные окружения:
+
+```bash
+export STEPIK_CLIENT_ID="..."
+export STEPIK_CLIENT_SECRET="..."
+```
+
+Пара Client id + Client secret дает полный доступ к вашему аккаунту без срока действия. Не коммитьте ее и не передавайте посторонним сервисам. Вход от имени других пользователей (authorization code) – в [docs/01-auth.md](docs/01-auth.md).
+
+## Быстрый старт за 5 минут
+
+### curl
+
+```bash
+# 1. Токен (живет около 10 часов)
+TOKEN=$(curl -s -X POST https://stepik.org/oauth2/token/ \
+  -u "$STEPIK_CLIENT_ID:$STEPIK_CLIENT_SECRET" \
+  -d grant_type=client_credentials \
+  | python3 -c 'import sys, json; print(json.load(sys.stdin)["access_token"])')
+
+# 2. Кто я: id пользователя, которому принадлежит приложение
+curl -s -H "Authorization: Bearer $TOKEN" https://stepik.org/api/stepics/1 \
+  | python3 -c 'import sys, json; print(json.load(sys.stdin)["stepics"][0]["user"])'
+
+# 3. Мои курсы (USER_ID – число из шага 2; страницы листаются через page=2, 3…)
+curl -s -H "Authorization: Bearer $TOKEN" \
+  "https://stepik.org/api/courses?teacher=USER_ID&page=1"
+
+# 4. Шаги урока: их id лежат в lessons[0].steps
+curl -s -H "Authorization: Bearer $TOKEN" https://stepik.org/api/lessons/LESSON_ID
+curl -s -g -H "Authorization: Bearer $TOKEN" \
+  "https://stepik.org/api/step-sources?ids[]=STEP_ID_1&ids[]=STEP_ID_2"
+
+# 5. Новый текст текстового шага
+curl -s -X PUT -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
+  https://stepik.org/api/step-sources/STEP_ID \
+  -d '{"stepSource": {"block": {"name": "text", "text": "<p>Новый текст</p>"}, "lesson": LESSON_ID, "position": 1}}'
+```
+
+Ключ `-g` нужен, чтобы curl не разбирал `[]` в адресе. В шаге 5 `lesson` и `position` берутся из ответа шага 4; у шага с заданием в `block` обязателен еще и полный `source` – см. [docs/05-step-types.md](docs/05-step-types.md).
+
+### Python (`requests`)
+
+```python
+import os
+import requests
+
+API = "https://stepik.org/api"
+LESSON_ID = 123456  # id своего урока
+
+r = requests.post(
+    "https://stepik.org/oauth2/token/",
+    data={"grant_type": "client_credentials"},
+    auth=(os.environ["STEPIK_CLIENT_ID"], os.environ["STEPIK_CLIENT_SECRET"]),
+    timeout=20,
+)
+r.raise_for_status()
+s = requests.Session()
+s.headers["Authorization"] = "Bearer " + r.json()["access_token"]
+
+# кто я
+me = s.get(f"{API}/stepics/1", timeout=30).json()["stepics"][0]["user"]
+
+# мои курсы, все страницы
+courses, page = [], 1
+while True:
+    d = s.get(f"{API}/courses", params={"teacher": me, "page": page}, timeout=30).json()
+    courses += d["courses"]
+    if not d["meta"]["has_next"]:
+        break
+    page += 1
+for c in courses:
+    print(c["id"], c["title"])
+
+# шаги урока (не больше 30 id за запрос)
+lesson = s.get(f"{API}/lessons/{LESSON_ID}", timeout=30).json()["lessons"][0]
+steps = s.get(f"{API}/step-sources", params={"ids[]": lesson["steps"][:30]}, timeout=30).json()["step-sources"]
+for st in sorted(steps, key=lambda x: x["position"]):
+    print(st["position"], st["id"], st["block"]["name"])
+
+# дописать абзац в первый текстовый шаг
+st = next(x for x in steps if x["block"]["name"] == "text")
+st["block"]["text"] += "<p>Добавлено скриптом.</p>"
+payload = {"stepSource": {"block": st["block"], "lesson": st["lesson"], "position": st["position"]}}
+s.put(f"{API}/step-sources/{st['id']}", json=payload, timeout=30).raise_for_status()
+```
+
+Аккуратная версия того же самого, с паузами, повторами и пробным прогоном, – в [examples/](examples/).
+
+## Оглавление
+
+| Файл | О чем |
+|---|---|
+| [01-auth.md](docs/01-auth.md) | client_credentials, authorization code, refresh-токены, "кто я" |
+| [02-structure.md](docs/02-structure.md) | курс → модуль → unit → урок → шаг, id и позиции |
+| [03-reading.md](docs/03-reading.md) | формат ответов, пагинация, `ids[]`, фильтры, которые врут |
+| [04-writing.md](docs/04-writing.md) | `PUT` полным объектом, создание курса и урока, позиции, готовность шагов |
+| [05-step-types.md](docs/05-step-types.md) | `block` и `source` каждого типа шага, санитайзер HTML, пределы длины полей |
+| [06-media.md](docs/06-media.md) | загрузка видео, видео-превью курса, картинки и доступность CDN |
+| [07-comments-and-announcements.md](docs/07-comments-and-announcements.md) | комментарии, ответ на отзыв, уведомления, новости курса и триггеры |
+| [08-errors-and-limits.md](docs/08-errors-and-limits.md) | тело ошибок, повторы на 429/5xx, как не попасть под блокировку |
+| [09-permissions.md](docs/09-permissions.md) | команда курса, приглашения, баны, рецензирование |
+
+## Примеры
+
+Python 3.8+, только стандартная библиотека и `requests` (`pip install requests`). Каждый скрипт берет `STEPIK_CLIENT_ID` и `STEPIK_CLIENT_SECRET` из окружения, делает паузу между запросами и останавливается, если Stepik ответил блокировкой.
+
+| Скрипт | Что делает | Пишет в Stepik |
+|---|---|---|
+| [backup_course.py](examples/backup_course.py) | выгружает курс целиком (модули, уроки, шаги с ответами) в один JSON | нет |
+| [list_lesson_steps.py](examples/list_lesson_steps.py) | печатает шаги урока: тип, начало текста, статус сборки | нет |
+| [find_in_steps.py](examples/find_in_steps.py) | ищет строку или регулярное выражение во всех шагах курса | нет |
+| [update_text_step.py](examples/update_text_step.py) | заменяет текст одного текстового шага; без `--apply` только показывает | да, с `--apply` |
+
+## Лицензия
+
+Тексты (этот README и `docs/`) – [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Код (`examples/` и фрагменты кода в текстах) – MIT. Полные тексты обеих лицензий – в [LICENSE](LICENSE).
+
+---
+
+Курсы автора – на [Rusau Learn](https://learn.rusau.net/?utm_source=github&utm_medium=readme&utm_campaign=gh-stepik-cookbook), профиль на Stepik – [stepik.org/users/483341705](https://stepik.org/users/483341705/teach).

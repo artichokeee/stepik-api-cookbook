@@ -1,0 +1,7 @@
+# backups and local data
+course-*-backup.json
+step-*-backup.json
+.env
+__pycache__/
+*.pyc
+.DS_Store
